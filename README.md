@@ -10,7 +10,7 @@ dist/ – Compiled and production-ready static files
 
 HTML
 
-CSS
+CSS.
 
 JavaScript
 
