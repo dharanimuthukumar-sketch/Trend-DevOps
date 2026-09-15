@@ -26,21 +26,24 @@ pipeline {
             }
         }
         
-                stage('DockerHub Registry Push') {
+                       stage('DockerHub Registry Push') {
             steps {
                 script {
-                    // Direct shell execution completely bypasses Jenkins registry management bugs
                     withCredentials([usernamePassword(credentialsId: 'dockerhub-credentials-id', usernameVariable: 'DOCKER_USER', passwordVariable: 'DOCKER_PASS')]) {
                         // 1. Authenticate natively via the Docker CLI
                         sh "echo \$DOCKER_PASS | docker login -u \$DOCKER_USER --password-stdin"
                         
-                        // 2. Push the tagged versions directly to Docker Hub
+                        // 2. Map the local image to the explicit latest tag format (This was missing!)
+                        sh "docker tag ${DOCKER_HUB_REGISTRY}:${BUILD_NUMBER} ${DOCKER_HUB_REGISTRY}:latest"
+                        
+                        // 3. Push both the versioned and latest tag assets up to Docker Hub
                         sh "docker push ${DOCKER_HUB_REGISTRY}:${BUILD_NUMBER}"
                         sh "docker push ${DOCKER_HUB_REGISTRY}:latest"
                     }
                 }
             }
         }
+
 
         
         stage('Kubernetes Infrastructure Sync') {
