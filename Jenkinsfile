@@ -3,7 +3,7 @@ pipeline {
     
     environment {
         // Replace with your exact DockerHub username credentials
-        DOCKER_HUB_REGISTRY = "YOUR_DOCKERHUB_USERNAME/trend-app"
+        DOCKER_HUB_REGISTRY = "namodharani/trend-app"
         AWS_REGION          = "us-east-1"
         EKS_CLUSTER_NAME    = "trend-cluster"
     }
