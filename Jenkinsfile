@@ -26,17 +26,22 @@ pipeline {
             }
         }
         
-        stage('DockerHub Registry Push') {
+                stage('DockerHub Registry Push') {
             steps {
                 script {
-                    // Connects using the secure credentials ID string stored inside your Jenkins dashboard
-                    docker.withRegistry('https://docker.io', 'dockerhub-credentials-id') {
-                        trendImage.push()
-                        trendImage.push("latest")
+                    // Direct shell execution completely bypasses Jenkins registry management bugs
+                    withCredentials([usernamePassword(credentialsId: 'dockerhub-credentials-id', usernameVariable: 'DOCKER_USER', passwordVariable: 'DOCKER_PASS')]) {
+                        // 1. Authenticate natively via the Docker CLI
+                        sh "echo \$DOCKER_PASS | docker login -u \$DOCKER_USER --password-stdin"
+                        
+                        // 2. Push the tagged versions directly to Docker Hub
+                        sh "docker push ${DOCKER_HUB_REGISTRY}:${BUILD_NUMBER}"
+                        sh "docker push ${DOCKER_HUB_REGISTRY}:latest"
                     }
                 }
             }
         }
+
         
         stage('Kubernetes Infrastructure Sync') {
             steps {
