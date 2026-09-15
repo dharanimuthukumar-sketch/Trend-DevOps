@@ -42,7 +42,7 @@ pipeline {
             steps {
                 script {
                     // Dynamically swap the DOCKERHUB_USERNAME placeholder inside your manifest file
-                    sh "sed -i 's|DOCKERHUB_USERNAME/trend-app:latest|${DOCKER_HUB_REGISTRY}:${BUILD_NUMBER}|g' k8s/deployment.yaml"
+                    sh "sed -i 's|namodharani/trend-app:latest|${DOCKER_HUB_REGISTRY}:${BUILD_NUMBER}|g' k8s/deployment.yaml"
                     
                     // Point kubectl to talk to your live AWS EKS cluster plane
                     sh "aws eks update-kubeconfig --region ${AWS_REGION} --name ${EKS_CLUSTER_NAME}"
