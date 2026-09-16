@@ -12,5 +12,6 @@ RUN npm install -g serve
 EXPOSE 3000
 
 # Bind execution parameters specifically to target port 3000
-CMD ["serve", "-s", "dist", "-l", "3000", "-a", "0.0.0.0"]
+CMD ["serve", "-s", "dist", "-l", "3000", "--address", "0.0.0.0"]
+
 
