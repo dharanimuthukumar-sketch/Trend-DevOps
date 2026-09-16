@@ -46,16 +46,16 @@ pipeline {
 
 
         
-        stage('Kubernetes Infrastructure Sync') {
+               stage('Kubernetes Infrastructure Sync') {
             steps {
                 script {
-                    // Dynamically swap the DOCKERHUB_USERNAME placeholder inside your manifest file
-                    sh "sed -i 's|namodharani/trend-app:latest|${DOCKER_HUB_REGISTRY}:${BUILD_NUMBER}|g' k8s/deployment.yaml"
+                    // Update deployment manifest dynamically to match the current build tag number
+                    sh "sed -i 's|namodharani/trend-app:.*|${DOCKER_HUB_REGISTRY}:${BUILD_NUMBER}|g' k8s/deployment.yaml"
                     
-                    // Point kubectl to talk to your live AWS EKS cluster plane
+                    // Point kubectl securely to your active AWS cluster
                     sh "aws eks update-kubeconfig --region ${AWS_REGION} --name ${EKS_CLUSTER_NAME}"
                     
-                    // Synchronize and apply your resource states onto Kubernetes node pods
+                    // Deploy your resources dynamically
                     sh "kubectl apply -f k8s/deployment.yaml"
                     sh "kubectl apply -f k8s/service.yaml"
                 }
