@@ -1,0 +1,180 @@
+1. Executive Summary & Architectural Overview
+This technical documentation outlines the deployment of the production-ready Trendify E-Commerce Application utilizing a modern GitOps continuous integration and continuous delivery (CI/CD) ecosystem. The infrastructure plane is orchestrated dynamically across Amazon Web Services (AWS) using infrastructure-as-code principles, hosted on a managed Amazon Elastic Kubernetes Service (EKS) cluster, and continuously validated via automated delivery pipelines.
+Global Port, Service, and Firewall Mapping Matrix
+To preserve security boundaries and prevent unauthorized public ingress while operating within budget limits, the following network configuration matrix was engineered and implemented across the cluster:
+
+| Component / Subsystem | Service Access Model | Internal Pod Port | Exposed Ingress Portal | Network Path & Tunnelling Logic |
+
+| Jenkins Control Plane | Node Security Group | 8080 | 8080 | Public IPv4 Entry Point (44.215.106.40:8080) |
+| Trendify Web App | Native ClusterIP | 3000 | 8081 | Direct local loopback tunnel (sh tunnel mapping) |
+| Prometheus Core Engine | System ClusterIP | 9090 | 8081 (Swapped) | Isolated monitoring namespace endpoint boundary |
+| Grafana Visual Analytics | Cloud LoadBalancer | 3000 | 8081 (Swapped) | Ingress visualization layer via service port metrics |
+
+------------------------------
+ 2. Infrastructure-as-Code & Containerization Blueprints-
+High-Performance Docker Runtime Configuration (Dockerfile)
+The frontend web asset server leverages an optimized, minimal Alpine footprint. It explicitly binds to the public network interface layer (0.0.0.0) using double-hyphen syntax parameters to natively bypass container isolation blocks.
+
+FROM node:18-alpineWORKDIR /appCOPY dist/ ./distRUN npm install -g serveEXPOSE 3000CMD ["serve", "-s", "dist", "-l", "3000", "--address", "0.0.0.0"]
+
+Native Kubernetes Manifest Implementations (k8s/)## Deployment Blueprint (k8s/deployment.yaml)
+
+apiVersion: apps/v1kind: Deploymentmetadata:
+  name: trend-deployment
+  labels:
+    app: trendspec:
+  replicas: 2
+  selector:
+    matchLabels:
+      app: trend
+  template:
+    metadata:
+      labels:
+        app: trend
+    spec:
+      containers:
+        - name: trend-app
+          image: namodharani/trend-app:latest
+          ports:
+            - containerPort: 3000
+
+## Service Network Mapping (k8s/service.yaml)
+
+apiVersion: v1kind: Servicemetadata:
+  name: trend-servicespec:
+  type: NodePort
+  selector:
+    app: trend
+  ports:
+    - protocol: TCP
+      port: 80
+      targetPort: 3000
+      nodePort: 31000
+
+------------------------------
+## 3. Automated Declarative Pipeline Script (Jenkinsfile)
+This multi-stage execution framework integrates automated workspace sanitization, secure Docker CLI shell login mechanisms via tokenization blocks, and automated Kubernetes synchronization states leveraging the modern AWS CLI v2 plugin.
+
+pipeline {
+    agent any
+    environment {
+        DOCKER_HUB_REGISTRY = "namodharani/trend-app"
+        AWS_REGION          = "us-east-1"
+        EKS_CLUSTER_NAME    = "trend-cluster"
+    }
+    stages {
+        stage('Pull Codebase') {
+            steps {
+                cleanWs()
+                checkout scm
+            }
+        }
+        stage('Docker Image Build') {
+            steps {
+                script {
+                    sh "docker build -t ${DOCKER_HUB_REGISTRY}:${BUILD_NUMBER} ."
+                }
+            }
+        }
+        stage('DockerHub Registry Push') {
+            steps {
+                script {
+                    withCredentials([usernamePassword(credentialsId: 'dockerhub-credentials-id', usernameVariable: 'DOCKER_USER', passwordVariable: 'DOCKER_PASS')]) {
+                        sh "echo \$DOCKER_PASS | docker login -u \$DOCKER_USER --password-stdin"
+                        sh "docker tag ${DOCKER_HUB_REGISTRY}:${BUILD_NUMBER} ${DOCKER_HUB_REGISTRY}:latest"
+                        sh "docker push ${DOCKER_HUB_REGISTRY}:${BUILD_NUMBER}"
+                        sh "docker push ${DOCKER_HUB_REGISTRY}:latest"
+                    }
+                }
+            }
+        }
+        stage('Kubernetes Infrastructure Sync') {
+            steps {
+                script {
+                    sh "sed -i 's|namodharani/trend-app:.*|${DOCKER_HUB_REGISTRY}:${BUILD_NUMBER}|g' k8s/deployment.yaml"
+                    sh "aws eks update-kubeconfig --region ${AWS_REGION} --name ${EKS_CLUSTER_NAME}"
+                    sh "kubectl apply -f k8s/deployment.yaml"
+                    sh "kubectl apply -f k8s/service.yaml"
+                }
+            }
+        }
+    }
+}
+
+------------------------------
+## 4. Observability & Monitoring Layer Metrics##  Production Data Aggregation Engine (prometheus.yaml)
+
+apiVersion: v1kind: ConfigMapmetadata:
+  name: prometheus-server-conf
+  namespace: monitoringdata:
+  prometheus.yml: |
+    global:
+      scrape_interval: 15s
+    scrape_configs:
+      - job_name: 'kubernetes-nodes'
+        kubernetes_sd_configs:
+          - role: node---apiVersion: apps/v1kind: Deploymentmetadata:
+  name: prometheus-deployment
+  namespace: monitoringspec:
+  replicas: 1
+  selector:
+    matchLabels:
+      app: prometheus-server
+  template:
+    metadata:
+      labels:
+        app: prometheus-server
+    spec:
+      securityContext:
+        fsGroup: 2000
+        runAsUser: 0
+      containers:
+        - name: prometheus
+          image: prom/prometheus:v2.45.0
+          args:
+            - "--config.file=/etc/prometheus/prometheus.yml"
+            - "--storage.tsdb.path=/prometheus/"
+          ports:
+            - containerPort: 9090
+          volumeMounts:
+            - name: config-volume
+              mountPath: /etc/prometheus/
+
+## Visual Analytics Dashboard Integration (grafana.yaml)
+
+apiVersion: apps/v1kind: Deploymentmetadata:
+  name: grafana-deployment
+  namespace: monitoringspec:
+  replicas: 1
+  selector:
+    matchLabels:
+      app: grafana
+  template:
+    metadata:
+      labels:
+        app: grafana
+    spec:
+      containers:
+        - name: grafana
+          image: grafana/grafana:10.0.0
+          ports:
+            - containerPort: 3000
+---apiVersion: v1kind: Servicemetadata:
+  name: grafana-service
+  namespace: monitoringspec:
+  selector:
+    app: grafana
+  ports:
+    - port: 80
+      targetPort: 3000
+  type: LoadBalancer
+
+------------------------------
+## 5. System Optimization & Verification Logs##  Verification Milestones
+
+   1. Webhook Execution (Success): The GitHub webhook payload handshake was validated via a clean green status indicator checkmark, passing data strings natively to http://44.215.106.
+   2. Jenkins Build Pipeline Execution (Success): Build #16 fully completed compiling, image layers successfully verified on Docker Hub registry, and infrastructure state deployed to EKS nodes completely hands-free.
+   3. Application Delivery Verification (Success): Port-forwarding verification successfully tunneled cluster boundaries on port 8081, establishing clean visual loading parameters of the web app landing page layout.
+   4. Time-Series Metric Tracking (Success): Prometheus configuration layers loaded cleanly on port 8081:9090, confirming target node collection status markers register natively.
+
+
